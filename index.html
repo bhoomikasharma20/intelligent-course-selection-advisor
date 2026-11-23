@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Course Selection Advisor</title>
+<style>
+  :root {
+    --bg: #f5f6fa; --card: #ffffff; --text: #1f2430; --muted: #6b7280;
+    --accent: #3b5bdb; --ok: #2b8a3e; --bad: #c92a2a; --line: #e3e6ee;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12141a; --card:#1b1e27; --text:#e6e8ef; --muted:#9aa1b2; --accent:#7c95ff; --ok:#51cf66; --bad:#ff6b6b; --line:#2b3040; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+  header { padding:28px 20px 8px; max-width:1100px; margin:0 auto; }
+  header h1 { margin:0; font-size:1.6rem; }
+  header p { margin:4px 0 0; color:var(--muted); }
+  main { max-width:1100px; margin:0 auto; padding:16px 20px 48px; display:grid; grid-template-columns:320px 1fr; gap:20px; }
+  @media (max-width: 820px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .card h2 { margin:0 0 12px; font-size:1.05rem; }
+  label { display:block; font-size:.85rem; color:var(--muted); margin:12px 0 4px; }
+  select, input[type=range] { width:100%; }
+  select { padding:8px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); font-size:.95rem; }
+  .gpa-val { font-weight:600; color:var(--text); }
+  .checks { max-height:260px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+  .checks label { display:flex; gap:8px; align-items:center; margin:6px 0; color:var(--text); font-size:.9rem; }
+  .seg { display:flex; gap:8px; }
+  .seg label { flex:1; margin:0; padding:8px; text-align:center; border:1px solid var(--line); border-radius:8px; cursor:pointer; color:var(--text); }
+  .seg input { display:none; }
+  .seg input:checked + span { color:var(--accent); font-weight:700; }
+  .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+  .metric { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .metric .v { font-size:1.7rem; font-weight:700; color:var(--accent); }
+  .metric .l { font-size:.8rem; color:var(--muted); }
+  .stack > * + * { margin-top:20px; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:.8rem; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:999px; background:var(--bg); border:1px solid var(--line); font-size:.78rem; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .empty { color:var(--muted); font-style:italic; }
+  ul.rules { margin:0; padding-left:20px; } ul.rules li { margin:4px 0; }
+  footer { text-align:center; color:var(--muted); font-size:.8rem; padding-bottom:24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎓 Student Course Selection Advisor</h1>
+  <p>Knowledge Representation and Reasoning project: rule-based expert system</p>
+</header>
+
+<main>
+  <aside class="card">
+    <h2>Student profile</h2>
+
+    <label for="sample">Load a sample student</label>
+    <select id="sample"></select>
+
+    <label>Semester</label>
+    <div class="seg">
+      <label><input type="radio" name="sem" value="fall" checked><span>Fall</span></label>
+      <label><input type="radio" name="sem" value="spring"><span>Spring</span></label>
+    </div>
+
+    <label for="gpa">GPA: <span class="gpa-val" id="gpaVal">3.0</span></label>
+    <input type="range" id="gpa" min="0" max="4" step="0.1" value="3.0">
+
+    <label for="interest">Interest area</label>
+    <select id="interest"></select>
+
+    <label>Completed courses</label>
+    <div class="checks" id="completed"></div>
+  </aside>
+
+  <section class="stack">
+    <div class="metrics">
+      <div class="metric"><div class="v" id="mLimit">-</div><div class="l">Max credit hours (from GPA)</div></div>
+      <div class="metric"><div class="v" id="mUsed">-</div><div class="l">Recommended credits</div></div>
+      <div class="metric"><div class="v" id="mDone">-</div><div class="l">Courses completed</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Recommended plan</h2>
+      <div id="plan"></div>
+    </div>
+
+    <div class="card">
+      <h2>Why not the other courses? (explanation)</h2>
+      <div id="reasons"></div>
+    </div>
+
+    <div class="card">
+      <h2>Prerequisite chain explorer</h2>
+      <label for="target" style="margin-top:0">Pick a course</label>
+      <select id="target"></select>
+      <div id="chain" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Rules used by the system</h2>
+      <ul class="rules">
+        <li><b>Max credits:</b> GPA ≥ 3.0 → 18, GPA ≥ 2.0 → 15, otherwise 12</li>
+        <li><b>Eligible(course)</b> = not completed AND offered this semester AND all prerequisites completed</li>
+        <li><b>Prerequisite chain</b> is computed recursively (prerequisites of prerequisites)</li>
+        <li><b>Priority:</b> courses matching the student's interest area come first</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer>KRR Project · Rule-based reasoning in JavaScript</footer>
+
+<script>
+// ===== KNOWLEDGE BASE (Facts) =====
+const COURSES = {
+  cs101: ["Programming Fundamentals", 3, "programming"],
+  cs102: ["Object Oriented Programming", 3, "programming"],
+  ma101: ["Discrete Mathematics", 3, "math"],
+  cs201: ["Data Structures", 3, "programming"],
+  ma201: ["Probability and Statistics", 3, "math"],
+  cs202: ["Database Systems", 3, "data"],
+  cs301: ["Artificial Intelligence", 3, "ai"],
+  cs302: ["Knowledge Representation and Reasoning", 3, "ai"],
+  cs303: ["Machine Learning", 3, "ai"],
+  cs304: ["Web Engineering", 3, "web"],
+  cs401: ["Final Year Project I", 3, "project"]
+};
+const PREREQ = {
+  cs102: ["cs101"],
+  cs201: ["cs102", "ma101"],
+  cs202: ["cs201"],
+  cs301: ["cs201"],
+  cs302: ["cs301", "ma101"],
+  cs303: ["cs301", "ma201"],
+  cs304: ["cs202"],
+  cs401: ["cs302"]
+};
+const OFFERED = {
+  cs101: ["fall", "spring"], cs102: ["fall", "spring"], ma101: ["fall"],
+  cs201: ["fall", "spring"], ma201: ["spring"], cs202: ["spring"],
+  cs301: ["fall"], cs302: ["fall"], cs303: ["spring"], cs304: ["fall"], cs401: ["fall"]
+};
+const STUDENTS = {
+  ali:  { completed: ["cs101", "cs102", "ma101", "cs201", "ma201"], gpa: 3.2, interest: "ai" },
+  sara: { completed: ["cs101"], gpa: 2.4, interest: "web" }
+};
+const AREAS = [...new Set(Object.values(COURSES).map(c => c[2]))].sort();
+
+// ===== RULES (Reasoning) =====
+function maxCredits(gpa) {
+  if (gpa >= 3.0) return 18;
+  if (gpa >= 2.0) return 15;
+  return 12;
+}
+function missingPrereqs(completed, code) {
+  return (PREREQ[code] || []).filter(p => !completed.has(p));
+}
+function courseStatus(completed, code, sem) {
+  if (completed.has(code)) return [false, "Already completed"];
+  if (!OFFERED[code].includes(sem)) return [false, "Not offered in " + sem + " semester"];
+  const m = missingPrereqs(completed, code);
+  if (m.length) return [false, "Missing prerequisite(s): " + m.join(", ")];
+  return [true, "All conditions satisfied"];
+}
+function eligibleCourses(completed, sem) {
+  return Object.keys(COURSES).filter(c => courseStatus(completed, c, sem)[0]);
+}
+function prereqChain(code) {            // recursive rule
+  const out = new Set();
+  for (const p of (PREREQ[code] || [])) {
+    out.add(p);
+    for (const q of prereqChain(p)) out.add(q);
+  }
+  return out;
+}
+function recommend(completed, gpa, interest, sem) {
+  const limit = maxCredits(gpa);
+  const el = eligibleCourses(completed, sem).sort((a, b) => {
+    const pa = COURSES[a][2] === interest ? 0 : 1;
+    const pb = COURSES[b][2] === interest ? 0 : 1;
+    return pa - pb || a.localeCompare(b);
+  });
+  const plan = []; let used = 0;
+  for (const c of el) {
+    const cr = COURSES[c][1];
+    if (used + cr <= limit) { plan.push(c); used += cr; }
+  }
+  return { plan, used, limit };
+}
+
+// ===== UI =====
+const $ = id => document.getElementById(id);
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+function init() {
+  $("sample").innerHTML = '<option value="">Custom</option>' +
+    Object.keys(STUDENTS).map(n => `<option value="${n}">${cap(n)}</option>`).join("");
+  $("interest").innerHTML = AREAS.map(a => `<option value="${a}">${cap(a)}</option>`).join("");
+  $("completed").innerHTML = Object.entries(COURSES).map(([c, v]) =>
+    `<label><input type="checkbox" value="${c}"> ${c} - ${v[0]}</label>`).join("");
+  $("target").innerHTML = Object.entries(COURSES).map(([c, v]) =>
+    `<option value="${c}">${c} - ${v[0]}</option>`).join("");
+  $("target").value = "cs401";
+  $("interest").value = "ai";
+
+  $("sample").addEventListener("change", loadSample);
+  document.querySelectorAll('input[name="sem"]').forEach(r => r.addEventListener("change", render));
+  $("gpa").addEventListener("input", render);
+  $("interest").addEventListener("change", render);
+  $("completed").addEventListener("change", render);
+  $("target").addEventListener("change", render);
+  render();
+}
+
+function loadSample() {
+  const s = STUDENTS[$("sample").value];
+  if (!s) return;
+  $("gpa").value = s.gpa;
+  $("interest").value = s.interest;
+  document.querySelectorAll("#completed input").forEach(cb => cb.checked = s.completed.includes(cb.value));
+  render();
+}
+
+function state() {
+  const completed = new Set([...document.querySelectorAll("#completed input:checked")].map(cb => cb.value));
+  const sem = document.querySelector('input[name="sem"]:checked').value;
+  return { completed, sem, gpa: parseFloat($("gpa").value), interest: $("interest").value };
+}
+
+function table(headers, rows) {
+  return "<table><thead><tr>" + headers.map(h => `<th>${h}</th>`).join("") + "</tr></thead><tbody>" +
+    rows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
+}
+
+function render() {
+  const { completed, sem, gpa, interest } = state();
+  $("gpaVal").textContent = gpa.toFixed(1);
+  const { plan, used, limit } = recommend(completed, gpa, interest, sem);
+
+  $("mLimit").textContent = limit;
+  $("mUsed").textContent = used;
+  $("mDone").textContent = completed.size;
+
+  $("plan").innerHTML = plan.length
+    ? table(["Code", "Course", "Credits", "Area"],
+        plan.map(c => [c, COURSES[c][0], COURSES[c][1], `<span class="tag">${COURSES[c][2]}</span>`]))
+    : '<div class="empty">No eligible courses for this semester.</div>';
+
+  const rows = [];
+  for (const c of Object.keys(COURSES)) {
+    if (plan.includes(c)) continue;
+    const [ok, reason] = courseStatus(completed, c, sem);
+    rows.push([c, COURSES[c][0],
+      ok ? '<span class="ok">Eligible, but skipped due to credit limit</span>' : `<span class="bad">${reason}</span>`]);
+  }
+  $("reasons").innerHTML = rows.length ? table(["Code", "Course", "Reason"], rows)
+    : '<div class="empty">All courses are in the plan.</div>';
+
+  const target = $("target").value;
+  const chain = [...prereqChain(target)].sort();
+  $("chain").innerHTML = chain.length
+    ? `<div style="margin-bottom:6px">To take <b>${target}</b> you need (directly or indirectly):</div>` +
+      chain.map(p => `<div>${completed.has(p) ? "✅" : "❌"} ${p} - ${COURSES[p][0]}</div>`).join("")
+    : '<div class="empty">No prerequisites.</div>';
+}
+
+if (typeof document !== "undefined") init();
+</script>
+</body>
+</html>
